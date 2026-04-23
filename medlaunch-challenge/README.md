@@ -57,7 +57,7 @@ medlaunch-challenge/
 
 ---
 
-## Stage 1 — Athena SQL
+## Stage 1 - Athena SQL
 
 Creates an external table over raw NDJSON in S3 using the OpenX JsonSerDe, then runs a CTAS query to extract facility metrics and write Parquet output.
 
@@ -78,7 +78,7 @@ Fields extracted: facility_id, facility_name, employee_count, number_of_offered_
 
 ---
 
-## Stage 2 — Python
+## Stage 2 - Python
 
 Reads all NDJSON files from S3, filters facilities with any accreditation expiring within 6 months, writes filtered records back to a separate S3 prefix.
 
@@ -103,7 +103,7 @@ python filter_expiring_accreditations.py \
 
 ---
 
-## Stage 3 — Lambda
+## Stage 3 - Lambda
 
 Triggered automatically when a new JSON or NDJSON file lands in the raw/ S3 prefix. Starts an Athena query counting accredited facilities per state and returns the QueryExecutionId.
 
@@ -125,7 +125,7 @@ Trigger:         S3 - bucket: medlaunch-techchallenge-rasagyna, prefix: raw/
 
 ---
 
-## Stage 4 — Step Functions
+## Stage 4 - Step Functions
 
 Orchestrates the full pipeline: invoke Lambda, wait for Athena, copy results to production on success, send SNS alert on failure.
 
