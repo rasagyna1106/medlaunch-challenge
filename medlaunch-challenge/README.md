@@ -17,7 +17,7 @@ A four-stage AWS pipeline that ingests raw facility JSON, extracts KPIs via Athe
 
 ## Stage Selection Rationale
 
-All four stages were completed. Stages 1 and 2 were the primary stages — SQL analytics on a cloud data lake and Python ETL with production-grade error handling, which maps directly to the MedLaunch data engineering role. Stage 3 added event-driven ingestion so new uploads trigger processing automatically. Stage 4 completed the pipeline with async Athena polling, result promotion to production, and SNS failure alerting — turning a collection of scripts into a reliable automated workflow.
+All four stages were completed. Stages 1 and 2 were the primary stages - SQL analytics on a cloud data lake and Python ETL with production-grade error handling, which maps directly to the MedLaunch data engineering role. Stage 3 added event-driven ingestion so new uploads trigger processing automatically. Stage 4 completed the pipeline with async Athena polling, result promotion to production, and SNS failure alerting turning a collection of scripts into a reliable automated workflow.
 
 ---
 
@@ -83,7 +83,7 @@ medlaunch-challenge/
 
 ```sql
 -- External table reads JSON directly from S3 using OpenX JsonSerDe
--- CTAS output is Parquet + Snappy — reduces scan cost 10-100x vs raw JSON
+-- CTAS output is Parquet + Snappy - reduces scan cost 10-100x vs raw JSON
 -- CROSS JOIN UNNEST flattens accreditations array for MIN(valid_until)
 -- WHERE CARDINALITY > 0 excludes facilities with no accreditation records
 -- ignore.malformed.json skips bad rows without failing the entire query
@@ -106,9 +106,9 @@ medlaunch-challenge/
 **Result:** 8 records loaded. 5 facilities filtered. Edge cases handled with warning logs. Output in s3://medlaunch-techchallenge-rasagyna/output/expiring/
 
 ```python
-# relativedelta used over timedelta — correct at month boundaries and leap years
+# relativedelta used over timedelta - correct at month boundaries and leap years
 # Dual JSON parser: tries strict NDJSON first, falls back to streaming decoder
-# All boto3 calls wrapped in ClientError — exits non-zero on AWS failures
+# All boto3 calls wrapped in ClientError - exits non-zero on AWS failures
 # Output as NDJSON — immediately Athena-queryable without transformation
 # Structured logging on every S3 call and filter result for CloudWatch analysis
 ```
@@ -130,11 +130,11 @@ medlaunch-challenge/
 **Result:** Lambda deployed with S3 trigger. Test execution returned queryExecutionId confirming Athena query started.
 
 ```python
-# boto3 client outside handler — reused across warm Lambda invocations
-# Trigger scoped to raw/ prefix — prevents recursive S3 invocation loop
-# Lambda starts query and exits — polling handled by Step Functions (Stage 4)
+# boto3 client outside handler - reused across warm Lambda invocations
+# Trigger scoped to raw/ prefix - prevents recursive S3 invocation loop
+# Lambda starts query and exits - polling handled by Step Functions (Stage 4)
 # Environment variables for all config — no hardcoded bucket or database names
-# is_processable_file() filters .json and .ndjson only — ignores other file types
+# is_processable_file() filters .json and .ndjson only - ignores other file types
 ```
 
 ---
