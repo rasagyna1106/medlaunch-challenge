@@ -10,7 +10,7 @@
 --           enable partition pruning and minimize data scanned per query.
 -- =============================================================================
 
--- Replace medlaunch-techchallenge-rasagyna with your actual S3 bucket name before running.
+-- Deployed bucket: medlaunch-techchallenge-rasagyna (us-east-1)
 
 CREATE EXTERNAL TABLE IF NOT EXISTS healthcare_facilities (
     facility_id     STRING          COMMENT 'Unique facility identifier',
