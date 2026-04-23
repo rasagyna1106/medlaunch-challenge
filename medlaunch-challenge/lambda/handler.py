@@ -12,6 +12,10 @@ Environment variables required:
   ATHENA_DATABASE        — Glue database name (e.g. default)
   ATHENA_RESULTS_BUCKET  — S3 bucket for Athena result files
   ATHENA_WORKGROUP       — Athena workgroup (default: primary)
+
+Deploy: set Lambda handler to handler.handler when this file is packaged as
+handler.py at the zip root (use lambda_function.handler only if you rename
+the module to lambda_function.py).
 """
 
 import json

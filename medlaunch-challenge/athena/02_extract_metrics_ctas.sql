@@ -2,6 +2,8 @@
 -- Stage 1: Extract Facility Metrics — CTAS to Parquet
 -- Healthcare Facility Accreditation Data Pipeline
 -- =============================================================================
+-- Output columns (6): facility_id, facility_name, employee_count,
+--   number_of_offered_services, expiry_date_of_first_accreditation, state
 -- Why Parquet? Columnar + Snappy compression reduces Athena scan cost by
 -- 10-100x vs raw JSON. Athena charges $5/TB scanned.
 -- Replace medlaunch-techchallenge-rasagyna before running.

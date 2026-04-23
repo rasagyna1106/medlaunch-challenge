@@ -134,6 +134,8 @@ Then run `athena/02_extract_metrics_ctas.sql`:
 -- Format:  Parquet + Snappy compression
 ```
 
+The CTAS writes **six** analytics columns: `facility_id`, `facility_name`, `employee_count`, `number_of_offered_services` (from `CARDINALITY(services)`), `expiry_date_of_first_accreditation` (earliest `valid_until` across accreditations), and `state` (from `location.state`).
+
 Verify results:
 ```sql
 SELECT * FROM facility_metrics ORDER BY expiry_date_of_first_accreditation;
@@ -190,6 +192,9 @@ aws lambda create-function \
 - Bucket: `medlaunch-techchallenge-rasagyna`
 - Event type: `s3:ObjectCreated:*`
 - Prefix: `raw/`
+- Suffix (optional): restrict to `.json` / `.ndjson` if your console supports it — the function also ignores non-`raw/` keys in code.
+
+**Handler name:** If the deployment zip has `handler.py` at the root (as in the packaging steps above), set the Lambda **handler** to `handler.handler` (module `handler`, function `handler`). Use `lambda_function.handler` only if you rename the file to `lambda_function.py`.
 
 ---
 
@@ -245,15 +250,15 @@ No `s3:*` wildcards. No `*` resource ARNs. No admin permissions.
 
 The `data/sample_facilities.ndjson` file contains 5 healthcare facility records:
 
-| Facility | State | Services | Accreditation Expiry |
-|---------|-------|----------|---------------------|
+| Facility | State | Services | Earliest accreditation expiry |
+|---------|-------|----------|------------------------------|
 | City Hospital | TX | 5 | 2025-06-30 ⚠️ |
 | Green Valley Clinic | CA | 2 | 2024-09-30 ⚠️ |
-| Lakeside Medical Center | FL | 4 | 2025-12-31 |
+| Lakeside Medical Center | FL | 4 | 2025-12-31 ⚠️ |
 | Sunrise Health Center | TX | 3 | 2025-08-15 ⚠️ |
 | Pineview Regional Hospital | FL | 5 | 2027-01-31 |
 
-⚠️ = accreditation expiring within 6 months of April 2025 (flagged by Stage 2)
+⚠️ = at least one accreditation expires on or before the Stage 2 cutoff (`today` + 6 calendar months). With a run date in **April 2026**, four of five facilities match; Pineview’s earliest expiry (2027-01-31) is outside that window.
 
 ---
 
