@@ -186,7 +186,7 @@ Three edge case records added to demonstrate robust error handling:
 
 ---
 
-## IAM — Least Privilege
+## IAM - Least Privilege
 
 No wildcards. No admin permissions. Every permission scoped to exact resource.
 
@@ -202,7 +202,7 @@ No wildcards. No admin permissions. Every permission scoped to exact resource.
 
 ## Cost
 
-Total cost: $0.00 — all within AWS Free Tier.
+Total cost: $0.00 - all within AWS Free Tier.
 
 | Service | Usage | Free Tier |
 |---|---|---|
