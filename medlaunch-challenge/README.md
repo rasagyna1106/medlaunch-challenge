@@ -22,44 +22,53 @@ All four stages were completed. Stages 1 and 2 were the primary stages — SQL a
 ---
 
 ## Architecture
+
+```
 S3 raw/
-|-- Athena (Stage 1) ---------> CTAS Parquet --> S3 output/facility_metrics/
-|-- Python (Stage 2) ---------> Filter expiring --> S3 output/expiring/
-|-- S3 Upload Event
-|
-Lambda (Stage 3): start Athena query, return queryExecutionId
-|
-Step Functions (Stage 4):
-Wait 10s --> Check status --> Success: copy to production/
---> Failure: SNS alert
+  |-- Athena (Stage 1) --> CTAS Parquet --> S3 output/facility_metrics/
+  |-- Python (Stage 2) --> Filter expiring --> S3 output/expiring/
+  |-- S3 Upload Event
+        |
+        Lambda (Stage 3) --> Start Athena query --> return queryExecutionId
+        |
+        Step Functions (Stage 4)
+          |-- Wait 10s
+          |-- Check Athena status
+          |-- SUCCEEDED --> CopyResultsToProduction --> PipelineSucceeded
+          |-- FAILED    --> SendFailureAlert (SNS email) --> PipelineFailed
+          |-- RUNNING   --> loop back to Wait
+```
 
 ---
 
 ## Repository Structure
+
+```
 medlaunch-challenge/
-README.md
-data/
-sample_facilities.ndjson       8 records (5 core + 3 edge cases)
-athena/
-01_create_table.sql            External table over S3 JSON
-02_extract_metrics_ctas.sql    CTAS to Parquet with facility KPIs
-python/
-filter_expiring_accreditations.py
-requirements.txt
-lambda/
-handler.py                     Stage 3 - S3 triggered Lambda
-athena_status_checker.py       Stage 4 - Athena polling Lambda
-requirements.txt
-stepfunctions/
-pipeline.json                  Stage 4 - State machine definition
-iam/
-least_privilege_policy.json    Minimal IAM permissions
+├── README.md
+├── data/
+│   └── sample_facilities.ndjson       8 records (5 core + 3 edge cases)
+├── athena/
+│   ├── 01_create_table.sql            External table over S3 JSON
+│   └── 02_extract_metrics_ctas.sql    CTAS to Parquet with facility KPIs
+├── python/
+│   ├── filter_expiring_accreditations.py
+│   └── requirements.txt
+├── lambda/
+│   ├── handler.py                     Stage 3 - S3 triggered Lambda
+│   ├── athena_status_checker.py       Stage 4 - Athena polling Lambda
+│   └── requirements.txt
+├── stepfunctions/
+│   └── pipeline.json                  Stage 4 - State machine definition
+└── iam/
+    └── least_privilege_policy.json    Minimal IAM permissions
+```
 
 ---
 
 ## Stage 1 — Athena SQL
 
-**Problem:** Raw facility JSON has nested arrays for services, labs, and accreditations. No way to query it directly. Need to extract 5 metrics per facility including earliest expiry date across multiple accreditation records.
+**Problem:** Raw facility JSON has nested arrays for services, labs, and accreditations. Need to extract 5 metrics per facility including earliest expiry across multiple accreditation records.
 
 **Solution:** Athena external table over S3 raw prefix using OpenX JsonSerDe. CTAS query extracts the 5 fields and writes Parquet output to S3.
 
@@ -84,17 +93,17 @@ least_privilege_policy.json    Minimal IAM permissions
 
 ## Stage 2 — Python
 
-**Problem:** Filtering facilities by expiry date within 6 months is cleaner in Python than SQL. Source data arrives in inconsistent formats from different upstream systems.
+**Problem:** Filtering by expiry window is cleaner in Python than SQL. Source data arrives in inconsistent formats from different upstream systems.
 
-**Solution:** boto3 script reads all files from raw S3 prefix, filters on expiry window, writes matching records as NDJSON to a separate prefix.
+**Solution:** boto3 script reads all files from raw S3 prefix, filters on 6-month expiry window, writes matching records as NDJSON to a separate prefix.
 
 **Why:**
-- relativedelta(months=6) gives correct calendar month arithmetic. timedelta(days=180) gives wrong results at month boundaries.
+- relativedelta(months=6) gives correct calendar month arithmetic. timedelta(days=180) breaks at month boundaries.
 - Dual parser handles both strict NDJSON and glued JSON transparently.
 - ClientError handlers on every boto3 call. Non-zero exit code on failure.
 - Output as NDJSON means Athena can query it immediately without transformation.
 
-**Result:** 8 records loaded. 5 facilities filtered. Edge case records handled with warning logs. Output in s3://medlaunch-techchallenge-rasagyna/output/expiring/
+**Result:** 8 records loaded. 5 facilities filtered. Edge cases handled with warning logs. Output in s3://medlaunch-techchallenge-rasagyna/output/expiring/
 
 ```python
 # relativedelta used over timedelta — correct at month boundaries and leap years
@@ -110,12 +119,12 @@ least_privilege_policy.json    Minimal IAM permissions
 
 **Problem:** Running the script manually on every upload is not production behaviour. New data should trigger processing automatically.
 
-**Solution:** Lambda triggered by S3 ObjectCreated events on raw/ prefix. Starts Athena query, returns queryExecutionId for Step Functions to poll.
+**Solution:** Lambda triggered by S3 ObjectCreated events on raw/ prefix. Starts Athena query and returns queryExecutionId for Step Functions to poll.
 
 **Why:**
 - S3 event notification is the correct trigger pattern. No polling, no cron.
-- Lambda exits immediately after starting the query. Does not poll internally. Polling inside Lambda risks the 15-minute timeout.
-- Trigger scoped to raw/ only. Prevents recursive invocations when output files are written to the same bucket.
+- Lambda exits immediately after starting the query. Polling inside Lambda risks the 15-minute timeout.
+- Trigger scoped to raw/ only. Prevents recursive invocations when output files land in the same bucket.
 - boto3 client initialized outside handler for reuse across warm invocations.
 
 **Result:** Lambda deployed with S3 trigger. Test execution returned queryExecutionId confirming Athena query started.
@@ -132,7 +141,7 @@ least_privilege_policy.json    Minimal IAM permissions
 
 ## Stage 4 — Step Functions
 
-**Problem:** Athena queries are async. Something needs to wait for completion, check the result, copy output to production on success, and alert on failure. Building this inside Lambda is brittle and expensive.
+**Problem:** Athena queries are async. Something needs to wait, check the result, copy output to production on success, and alert on failure. Building this inside Lambda is brittle and expensive.
 
 **Solution:** Step Functions state machine that waits, polls, evaluates, and routes to success or failure with full SNS alerting.
 
@@ -140,15 +149,18 @@ least_privilege_policy.json    Minimal IAM permissions
 - Wait state pauses execution without consuming compute. Correct serverless pattern for async calls.
 - Separate status checker Lambda keeps concerns clean. One function starts queries, one checks them.
 - Every state has a Catch block. No failure can pass through silently.
-- SNS publishes full error payload so the alert email contains enough context to diagnose without opening CloudWatch.
-- CopyObject to production/ separates raw Athena output from curated data. Downstream consumers always read validated results.
+- SNS publishes full error payload so the alert email has enough context to diagnose without opening CloudWatch.
+- CopyObject to production/ separates raw Athena output from curated data.
 
 **State machine flow:**
+
+```
 StartAthenaQuery --> ExtractQueryId --> WaitForQuery (10s)
---> CheckQueryStatus --> EvaluateStatus
---> SUCCEEDED: CopyResultsToProduction --> PipelineSucceeded
---> FAILED:    SendFailureAlert --> PipelineFailed
---> RUNNING:   loop back to WaitForQuery
+  --> CheckQueryStatus --> EvaluateStatus
+        --> SUCCEEDED: CopyResultsToProduction --> PipelineSucceeded
+        --> FAILED:    SendFailureAlert --> PipelineFailed
+        --> RUNNING:   loop back to WaitForQuery
+```
 
 **Result:** State machine executed successfully. Full green flow confirmed. SNS alert tested and working.
 
