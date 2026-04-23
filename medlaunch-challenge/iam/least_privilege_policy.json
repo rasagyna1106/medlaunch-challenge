@@ -1,0 +1,59 @@
+{
+    "_comment": "Least-privilege IAM policy. Replace medlaunch-challenge-rasagyna and 2513-3505-5169 before applying.",
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "S3ReadRawData",
+            "Effect": "Allow",
+            "Action": ["s3:GetObject", "s3:ListBucket"],
+            "Resource": [
+                "arn:aws:s3:::medlaunch-challenge-rasagyna",
+                "arn:aws:s3:::medlaunch-challenge-rasagyna/raw/*"
+            ]
+        },
+        {
+            "Sid": "S3WriteOutputData",
+            "Effect": "Allow",
+            "Action": ["s3:PutObject", "s3:DeleteObject"],
+            "Resource": [
+                "arn:aws:s3:::medlaunch-challenge-rasagyna/output/*",
+                "arn:aws:s3:::medlaunch-challenge-rasagyna/athena-results/*"
+            ]
+        },
+        {
+            "Sid": "AthenaQueryExecution",
+            "Effect": "Allow",
+            "Action": [
+                "athena:StartQueryExecution",
+                "athena:GetQueryExecution",
+                "athena:GetQueryResults",
+                "athena:StopQueryExecution",
+                "athena:ListQueryExecutions"
+            ],
+            "Resource": ["arn:aws:athena:us-east-1:2513-3505-5169:workgroup/primary"]
+        },
+        {
+            "Sid": "GlueCatalogAccess",
+            "Effect": "Allow",
+            "Action": [
+                "glue:GetDatabase",
+                "glue:GetTable",
+                "glue:GetPartitions",
+                "glue:CreateTable",
+                "glue:DeleteTable"
+            ],
+            "Resource": [
+                "arn:aws:glue:us-east-1:2513-3505-5169:catalog",
+                "arn:aws:glue:us-east-1:2513-3505-5169:database/default",
+                "arn:aws:glue:us-east-1:2513-3505-5169:table/default/healthcare_facilities",
+                "arn:aws:glue:us-east-1:2513-3505-5169:table/default/facility_metrics"
+            ]
+        },
+        {
+            "Sid": "CloudWatchLogsForLambda",
+            "Effect": "Allow",
+            "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+            "Resource": ["arn:aws:logs:us-east-1:2513-3505-5169:log-group:/aws/lambda/medlaunch-facility-processor:*"]
+        }
+    ]
+}
