@@ -1,9 +1,10 @@
 {
-  "Comment": "MedLaunch accreditation pipeline - triggers Athena query, polls for completion, copies results or sends SNS alert on failure",
+  "Comment": "MedLaunch accreditation pipeline - orchestrates Athena query execution, polls for completion, copies results to production on success, and sends SNS alert on failure",
   "StartAt": "StartAthenaQuery",
   "States": {
     "StartAthenaQuery": {
       "Type": "Task",
+      "Comment": "Invoke the facility processor Lambda to start an Athena query. Returns queryExecutionId.",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
         "FunctionName": "medlaunch-facility-processor",
@@ -29,6 +30,7 @@
     },
     "ExtractQueryId": {
       "Type": "Pass",
+      "Comment": "Pull the queryExecutionId out of the Lambda response and promote it to the top level.",
       "Parameters": {
         "queryExecutionId.$": "$.lambdaResult.Payload.queryExecutionId"
       },
@@ -36,11 +38,13 @@
     },
     "WaitForQuery": {
       "Type": "Wait",
+      "Comment": "Wait 10 seconds before checking Athena query status.",
       "Seconds": 10,
       "Next": "CheckQueryStatus"
     },
     "CheckQueryStatus": {
       "Type": "Task",
+      "Comment": "Invoke the status checker Lambda to poll Athena for query completion.",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
         "FunctionName": "medlaunch_athena_status_checker",
@@ -66,6 +70,7 @@
     },
     "EvaluateStatus": {
       "Type": "Choice",
+      "Comment": "Route based on Athena query result. SUCCEEDED goes to copy, FAILED goes to alert, still running loops back to wait.",
       "Choices": [
         {
           "Variable": "$.statusResult.Payload.succeeded",
@@ -82,6 +87,7 @@
     },
     "CopyResultsToProduction": {
       "Type": "Task",
+      "Comment": "Copy the Athena result CSV from staging to the production prefix.",
       "Resource": "arn:aws:states:::aws-sdk:s3:copyObject",
       "Parameters": {
         "Bucket": "medlaunch-techchallenge-rasagyna",
@@ -99,10 +105,12 @@
       ]
     },
     "PipelineSucceeded": {
-      "Type": "Succeed"
+      "Type": "Succeed",
+      "Comment": "Terminal success state. Results are in the production prefix."
     },
     "SendFailureAlert": {
       "Type": "Task",
+      "Comment": "Publish SNS notification with full error details so nothing silently fails.",
       "Resource": "arn:aws:states:::sns:publish",
       "Parameters": {
         "TopicArn": "arn:aws:sns:us-east-1:251335055169:medlaunch-pipeline-alerts",
@@ -113,6 +121,7 @@
     },
     "PipelineFailed": {
       "Type": "Fail",
+      "Comment": "Terminal failure state. SNS alert has already been sent.",
       "Error": "PipelineFailed",
       "Cause": "Athena query failed or pipeline error occurred"
     }
