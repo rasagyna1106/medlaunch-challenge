@@ -1,5 +1,5 @@
 {
-    "_comment": "Least-privilege IAM policy. Replace medlaunch-techchallenge-rasagyna and 251335055169 before applying.",
+    "_comment": "Least-privilege IAM policy.",
     "Version": "2012-10-17",
     "Statement": [
         {
