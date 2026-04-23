@@ -1,0 +1,120 @@
+{
+  "Comment": "MedLaunch accreditation pipeline - triggers Athena query, polls for completion, copies results or sends SNS alert on failure",
+  "StartAt": "StartAthenaQuery",
+  "States": {
+    "StartAthenaQuery": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "medlaunch-facility-processor",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.lambdaResult",
+      "Next": "ExtractQueryId",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "SendFailureAlert",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "ExtractQueryId": {
+      "Type": "Pass",
+      "Parameters": {
+        "queryExecutionId.$": "$.lambdaResult.Payload.queryExecutionId"
+      },
+      "Next": "WaitForQuery"
+    },
+    "WaitForQuery": {
+      "Type": "Wait",
+      "Seconds": 10,
+      "Next": "CheckQueryStatus"
+    },
+    "CheckQueryStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "medlaunch_athena_status_checker",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.statusResult",
+      "Next": "EvaluateStatus",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 3,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "SendFailureAlert",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "EvaluateStatus": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.statusResult.Payload.succeeded",
+          "BooleanEquals": true,
+          "Next": "CopyResultsToProduction"
+        },
+        {
+          "Variable": "$.statusResult.Payload.failed",
+          "BooleanEquals": true,
+          "Next": "SendFailureAlert"
+        }
+      ],
+      "Default": "WaitForQuery"
+    },
+    "CopyResultsToProduction": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:copyObject",
+      "Parameters": {
+        "Bucket": "medlaunch-techchallenge-rasagyna",
+        "CopySource.$": "States.Format('medlaunch-techchallenge-rasagyna/athena-results/{}.csv', $.queryExecutionId)",
+        "Key.$": "States.Format('production/query-results/{}.csv', $.queryExecutionId)"
+      },
+      "ResultPath": "$.copyResult",
+      "Next": "PipelineSucceeded",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "SendFailureAlert",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "PipelineSucceeded": {
+      "Type": "Succeed"
+    },
+    "SendFailureAlert": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:251335055169:medlaunch-pipeline-alerts",
+        "Subject": "MedLaunch Pipeline Failed",
+        "Message.$": "States.Format('Pipeline failed. Error details: {}', States.JsonToString($))"
+      },
+      "Next": "PipelineFailed"
+    },
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "Athena query failed or pipeline error occurred"
+    }
+  }
+}

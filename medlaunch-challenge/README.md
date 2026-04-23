@@ -11,7 +11,7 @@
 
 This project implements an automated AWS data pipeline that processes healthcare facility JSON records stored in S3, extracts accreditation metrics using Athena SQL, filters facilities with expiring accreditations using Python/boto3, and triggers automated processing via a Lambda function on new data uploads.
 
-**Stages completed:** Stage 1 (Athena SQL), Stage 2 (Python/boto3), Stage 3 (Lambda — bonus)
+**Stages completed:** Stage 1 (Athena SQL), Stage 2 (Python/boto3), Stage 3 (Lambda — bonus), Stage 4 (Step Functions)
 
 ---
 
@@ -71,7 +71,10 @@ medlaunch-challenge/
 │   └── requirements.txt                   # boto3, python-dateutil
 ├── lambda/
 │   ├── handler.py                         # Stage 3 — event-driven Lambda
+│   ├── athena_status_checker.py           # Stage 4 — Athena query status checker
 │   └── requirements.txt                   # boto3
+├── stepfunctions/
+│   └── pipeline.json                      # Stage 4 — Step Functions state machine (ASL)
 └── iam/
     └── least_privilege_policy.json        # Minimal IAM policy
 ```
@@ -214,6 +217,26 @@ Athena queries can take 10-60+ seconds. Polling inside Lambda wastes execution t
 
 ### Why glued JSON fallback in the Python parser?
 The sample data provided arrives as multiple JSON objects concatenated without a wrapper array. Rather than requiring pre-normalization, the script handles both strict NDJSON and glued JSON transparently — making it resilient to different upstream data formats.
+
+---
+
+## Stage 4: Workflow Orchestration with Step Functions
+
+**What was done:**
+
+A Step Functions state machine was built to orchestrate the complete pipeline end to end. The workflow chains together Lambda invocation, Athena query polling, S3 result copying, and SNS failure alerts into a single automated workflow that runs whenever triggered.
+
+The state machine has six states: StartAthenaQuery invokes the facility processor Lambda, ExtractQueryId pulls the query ID from the response, WaitForQuery pauses for 10 seconds, CheckQueryStatus invokes the status checker Lambda to poll Athena, EvaluateStatus routes to either success or failure based on the query result, CopyResultsToProduction copies the output file to the production S3 prefix, and SendFailureAlert publishes an SNS notification if anything goes wrong.
+
+**Why this approach:**
+
+Step Functions was the right tool for orchestrating an async workflow because Athena queries do not complete instantly. Rather than building a polling loop inside a single Lambda function which would burn execution time and risk the 15-minute timeout, Step Functions handles the wait natively using a Wait state. The workflow pauses, then resumes to check status, retrying in a loop until the query finishes. This is the correct serverless pattern for async AWS service calls.
+
+Every state has a Catch block that routes failures to SendFailureAlert so no error can silently pass through. The SNS topic sends an email notification with the full error details, which is exactly the kind of observability a production healthcare data pipeline needs.
+
+**Result:**
+
+State machine deployed successfully. Execution ran through all states, correctly detected query completion, and routed through the full workflow. SNS failure alerts fired correctly during error testing, confirming the failure handling works as designed.
 
 ---
 
