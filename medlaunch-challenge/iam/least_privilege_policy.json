@@ -1,5 +1,5 @@
 {
-    "_comment": "Least-privilege IAM policy. Replace medlaunch-challenge-rasagyna and 2513-3505-5169 before applying.",
+    "_comment": "Least-privilege IAM policy. Replace medlaunch-techchallenge-rasagyna and 2513-3505-5169 before applying.",
     "Version": "2012-10-17",
     "Statement": [
         {
@@ -7,8 +7,8 @@
             "Effect": "Allow",
             "Action": ["s3:GetObject", "s3:ListBucket"],
             "Resource": [
-                "arn:aws:s3:::medlaunch-challenge-rasagyna",
-                "arn:aws:s3:::medlaunch-challenge-rasagyna/raw/*"
+                "arn:aws:s3:::medlaunch-techchallenge-rasagyna",
+                "arn:aws:s3:::medlaunch-techchallenge-rasagyna/raw/*"
             ]
         },
         {
@@ -16,8 +16,8 @@
             "Effect": "Allow",
             "Action": ["s3:PutObject", "s3:DeleteObject"],
             "Resource": [
-                "arn:aws:s3:::medlaunch-challenge-rasagyna/output/*",
-                "arn:aws:s3:::medlaunch-challenge-rasagyna/athena-results/*"
+                "arn:aws:s3:::medlaunch-techchallenge-rasagyna/output/*",
+                "arn:aws:s3:::medlaunch-techchallenge-rasagyna/athena-results/*"
             ]
         },
         {

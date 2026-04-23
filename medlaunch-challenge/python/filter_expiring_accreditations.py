@@ -9,9 +9,9 @@ records as NDJSON to a separate S3 destination.
 
 Usage:
     python filter_expiring_accreditations.py \
-        --source-bucket  medlaunch-challenge-rasagyna \
+        --source-bucket  medlaunch-techchallenge-rasagyna \
         --source-prefix  raw/ \
-        --dest-bucket    medlaunch-challenge-rasagyna \
+        --dest-bucket    medlaunch-techchallenge-rasagyna \
         --dest-prefix    output/expiring/ \
         --months         6
 """

@@ -100,7 +100,7 @@ I added **Stage 3 (Lambda)** as a bonus because event-driven ingestion is the fi
 ### Step 1 — Create S3 Bucket and Upload Data
 
 ```bash
-BUCKET=medlaunch-challenge-rasagyna
+BUCKET=medlaunch-techchallenge-rasagyna
 REGION=us-east-1
 
 # Create bucket
@@ -114,7 +114,7 @@ aws s3 cp data/sample_facilities.ndjson s3://$BUCKET/raw/
 
 In the AWS Console:
 1. Open **Athena → Settings → Manage**
-2. Set query result location: `s3://medlaunch-challenge-rasagyna/athena-results/`
+2. Set query result location: `s3://medlaunch-techchallenge-rasagyna/athena-results/`
 3. Save
 
 ### Step 3 — Run Stage 1 (Athena SQL)
@@ -124,13 +124,13 @@ Open **Athena Query Editor** → database: `default`
 Run `athena/01_create_table.sql` first:
 ```sql
 -- Creates external table: healthcare_facilities
--- Reads directly from s3://medlaunch-challenge-rasagyna/raw/
+-- Reads directly from s3://medlaunch-techchallenge-rasagyna/raw/
 ```
 
 Then run `athena/02_extract_metrics_ctas.sql`:
 ```sql
 -- Creates: facility_metrics table
--- Output:  s3://medlaunch-challenge-rasagyna/output/facility_metrics/
+-- Output:  s3://medlaunch-techchallenge-rasagyna/output/facility_metrics/
 -- Format:  Parquet + Snappy compression
 ```
 
@@ -146,9 +146,9 @@ cd python
 pip install -r requirements.txt
 
 python filter_expiring_accreditations.py \
-    --source-bucket medlaunch-challenge-rasagyna \
+    --source-bucket medlaunch-techchallenge-rasagyna \
     --source-prefix raw/ \
-    --dest-bucket   medlaunch-challenge-rasagyna \
+    --dest-bucket   medlaunch-techchallenge-rasagyna \
     --dest-prefix   output/expiring/ \
     --months        6 \
     --region        us-east-1
@@ -156,7 +156,7 @@ python filter_expiring_accreditations.py \
 
 Verify output:
 ```bash
-aws s3 cp s3://medlaunch-challenge-rasagyna/output/expiring/expiring_accreditations.ndjson -
+aws s3 cp s3://medlaunch-techchallenge-rasagyna/output/expiring/expiring_accreditations.ndjson -
 ```
 
 ### Step 5 — Deploy Stage 3 (Lambda — bonus)
@@ -178,7 +178,7 @@ aws lambda create-function \
     --memory-size 256 \
     --environment Variables="{
         ATHENA_DATABASE=default,
-        ATHENA_RESULTS_BUCKET=medlaunch-challenge-rasagyna,
+        ATHENA_RESULTS_BUCKET=medlaunch-techchallenge-rasagyna,
         ATHENA_WORKGROUP=primary
     }" \
     --region us-east-1
@@ -187,7 +187,7 @@ aws lambda create-function \
 **Add S3 trigger in AWS Console:**
 - Lambda → Configuration → Triggers → Add trigger
 - Source: S3
-- Bucket: `medlaunch-challenge-rasagyna`
+- Bucket: `medlaunch-techchallenge-rasagyna`
 - Event type: `s3:ObjectCreated:*`
 - Prefix: `raw/`
 
@@ -263,7 +263,7 @@ Run after submission review to avoid any AWS charges:
 
 ```bash
 # Delete all S3 content and bucket
-aws s3 rb s3://medlaunch-challenge-rasagyna --force
+aws s3 rb s3://medlaunch-techchallenge-rasagyna --force
 
 # Delete Athena tables (run in Athena console)
 # DROP TABLE IF EXISTS healthcare_facilities;

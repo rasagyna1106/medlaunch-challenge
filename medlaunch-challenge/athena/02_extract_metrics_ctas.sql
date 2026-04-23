@@ -4,7 +4,7 @@
 -- =============================================================================
 -- Why Parquet? Columnar + Snappy compression reduces Athena scan cost by
 -- 10-100x vs raw JSON. Athena charges $5/TB scanned.
--- Replace medlaunch-challenge-rasagyna before running.
+-- Replace medlaunch-techchallenge-rasagyna before running.
 -- Run AFTER 01_create_table.sql has executed successfully.
 -- =============================================================================
 
@@ -12,7 +12,7 @@ CREATE TABLE facility_metrics
 WITH (
     format              = 'PARQUET',
     parquet_compression = 'SNAPPY',
-    external_location   = 's3://medlaunch-challenge-rasagyna/output/facility_metrics/'
+    external_location   = 's3://medlaunch-techchallenge-rasagyna/output/facility_metrics/'
 )
 AS
 SELECT
