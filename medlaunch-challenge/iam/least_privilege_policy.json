@@ -1,25 +1,35 @@
 {
-    "_comment": "Least-privilege IAM policy.",
+    "_comment": "Least-privilege IAM policy for the MedLaunch data pipeline. Replace medlaunch-techchallenge-rasagyna and 251335055169 before applying. Attach this policy to the IAM user (Stage 1+2) or Lambda execution role (Stage 3).",
+
     "Version": "2012-10-17",
     "Statement": [
+
         {
             "Sid": "S3ReadRawData",
             "Effect": "Allow",
-            "Action": ["s3:GetObject", "s3:ListBucket"],
+            "Action": [
+                "s3:GetObject",
+                "s3:ListBucket"
+            ],
             "Resource": [
                 "arn:aws:s3:::medlaunch-techchallenge-rasagyna",
                 "arn:aws:s3:::medlaunch-techchallenge-rasagyna/raw/*"
             ]
         },
+
         {
             "Sid": "S3WriteOutputData",
             "Effect": "Allow",
-            "Action": ["s3:PutObject", "s3:DeleteObject"],
+            "Action": [
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
             "Resource": [
                 "arn:aws:s3:::medlaunch-techchallenge-rasagyna/output/*",
                 "arn:aws:s3:::medlaunch-techchallenge-rasagyna/athena-results/*"
             ]
         },
+
         {
             "Sid": "AthenaQueryExecution",
             "Effect": "Allow",
@@ -30,10 +40,13 @@
                 "athena:StopQueryExecution",
                 "athena:ListQueryExecutions"
             ],
-            "Resource": ["arn:aws:athena:us-east-1:251335055169:workgroup/primary"]
+            "Resource": [
+                "arn:aws:athena:us-east-1:251335055169:workgroup/primary"
+            ]
         },
+
         {
-            "Sid": "GlueCatalogAccess",
+            "Sid": "GlueCatalogReadOnly",
             "Effect": "Allow",
             "Action": [
                 "glue:GetDatabase",
@@ -49,11 +62,19 @@
                 "arn:aws:glue:us-east-1:251335055169:table/default/facility_metrics"
             ]
         },
+
         {
             "Sid": "CloudWatchLogsForLambda",
             "Effect": "Allow",
-            "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-            "Resource": ["arn:aws:logs:us-east-1:251335055169:log-group:/aws/lambda/medlaunch-facility-processor:*"]
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                "arn:aws:logs:us-east-1:251335055169:log-group:/aws/lambda/medlaunch-facility-processor:*"
+            ]
         }
+
     ]
 }

@@ -10,13 +10,11 @@
 --           enable partition pruning and minimize data scanned per query.
 -- =============================================================================
 
--- Deployed bucket: medlaunch-techchallenge-rasagyna (us-east-1)
-
 CREATE EXTERNAL TABLE IF NOT EXISTS healthcare_facilities (
     facility_id     STRING          COMMENT 'Unique facility identifier',
     facility_name   STRING          COMMENT 'Human-readable facility name',
 
-    location STRUCT
+    location STRUCT<
         address : STRING,
         city    : STRING,
         state   : STRING,
@@ -27,25 +25,25 @@ CREATE EXTERNAL TABLE IF NOT EXISTS healthcare_facilities (
 
     services        ARRAY<STRING>   COMMENT 'List of medical services offered',
 
-    labs ARRAY<STRUCT
+    labs ARRAY<STRUCT<
         lab_name       : STRING,
         certifications : ARRAY<STRING>
     >>                              COMMENT 'Lab units and their certifications',
 
-    accreditations ARRAY<STRUCT
+    accreditations ARRAY<STRUCT<
         accreditation_body : STRING,
         accreditation_id   : STRING,
-        valid_until        : STRING
+        valid_until        : STRING  -- stored as STRING; cast to DATE in queries
     >>                              COMMENT 'Accreditation records with expiry dates'
 )
 ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
 WITH SERDEPROPERTIES (
-    'ignore.malformed.json' = 'true',
-    'case.insensitive'      = 'true'
+    'ignore.malformed.json' = 'true',   -- skip unparseable rows, do not fail job
+    'case.insensitive'      = 'true'    -- tolerate mixed-case field names in source
 )
 STORED AS TEXTFILE
 LOCATION 's3://medlaunch-techchallenge-rasagyna/raw/'
 TBLPROPERTIES (
-    'has_encrypted_data'      = 'false',
-    'skip.header.line.count'  = '0'
+    'has_encrypted_data' = 'false',
+    'skip.header.line.count' = '0'
 );
