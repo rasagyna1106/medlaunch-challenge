@@ -5,7 +5,7 @@
 
 ## Stage Selection Rationale
 
-All four stages were completed. Stages 1 and 2 were chosen as the primary stages because they directly reflect the core data engineering responsibilities in the MedLaunch role — SQL analytics on cloud data lakes and Python-based ETL with proper validation and error handling. Stage 1 demonstrates Athena-specific patterns like CTAS, JsonSerDe, and Parquet output for cost optimization. Stage 2 demonstrates production Python practices including structured logging, boto3 exception handling, and resilient JSON parsing. Stages 3 and 4 were added to show the full serverless architecture — Lambda for event-driven ingestion and Step Functions for workflow orchestration with async Athena polling, S3 result promotion, and SNS failure alerting.
+All four stages were completed. Stages 1 and 2 were chosen as the primary stages because they directly reflect the core data engineering responsibilities in the MedLaunch role-SQL analytics on cloud data lakes and Python based ETL with proper validation and error handling. Stage 1 demonstrates Athena-specific patterns like CTAS, JsonSerDe, and Parquet output for cost optimization. Stage 2 demonstrates production Python practices including structured logging, boto3 exception handling, and resilient JSON parsing. Stages 3 and 4 were added to show the full serverless architecture and Lambda for event-driven ingestion and Step Functions for workflow orchestration with async Athena polling, S3 result promotion, and SNS failure alerting.
 
 ---
 
