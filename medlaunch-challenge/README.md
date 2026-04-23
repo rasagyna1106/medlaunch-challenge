@@ -17,7 +17,7 @@ A four-stage AWS pipeline that ingests raw facility JSON, extracts KPIs via Athe
 
 ## Stage Selection Rationale
 
-All four stages were completed. Stages 1 and 2 were the primary stages - SQL analytics on a cloud data lake and Python ETL with production-grade error handling, which maps directly to the MedLaunch data engineering role. Stage 3 added event-driven ingestion so new uploads trigger processing automatically. Stage 4 completed the pipeline with async Athena polling, result promotion to production, and SNS failure alerting turning a collection of scripts into a reliable automated workflow.
+All four stages were completed. Stages 1 and 2 were the primary stages - SQL analytics on a cloud data lake and Python ETL with production-grade error handling. Stage 3 added event-driven ingestion so new uploads trigger processing automatically. Stage 4 completed the pipeline with async Athena polling, result promotion to production, and SNS failure alerting turning a collection of scripts into a reliable automated workflow.
 
 ---
 
