@@ -14,8 +14,7 @@ Environment variables required:
   ATHENA_WORKGROUP       — Athena workgroup (default: primary)
 
 Deploy: set Lambda handler to handler.handler when this file is packaged as
-handler.py at the zip root (use lambda_function.handler only if you rename
-the module to lambda_function.py).
+handler.py at the zip root.
 """
 
 import json
