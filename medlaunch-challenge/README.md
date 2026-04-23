@@ -66,7 +66,7 @@ medlaunch-challenge/
 
 ---
 
-## Stage 1 — Athena SQL
+## Stage 1 - Athena SQL
 
 **Problem:** Raw facility JSON has nested arrays for services, labs, and accreditations. Need to extract 5 metrics per facility including earliest expiry across multiple accreditation records.
 
@@ -91,7 +91,7 @@ medlaunch-challenge/
 
 ---
 
-## Stage 2 — Python
+## Stage 2 - Python
 
 **Problem:** Filtering by expiry window is cleaner in Python than SQL. Source data arrives in inconsistent formats from different upstream systems.
 
@@ -115,7 +115,7 @@ medlaunch-challenge/
 
 ---
 
-## Stage 3 — Lambda
+## Stage 3 - Lambda
 
 **Problem:** Running the script manually on every upload is not production behaviour. New data should trigger processing automatically.
 
@@ -139,7 +139,7 @@ medlaunch-challenge/
 
 ---
 
-## Stage 4 — Step Functions
+## Stage 4 - Step Functions
 
 **Problem:** Athena queries are async. Something needs to wait, check the result, copy output to production on success, and alert on failure. Building this inside Lambda is brittle and expensive.
 
