@@ -1,166 +1,182 @@
 # MedLaunch AWS Data Engineering Challenge
-**Submitted by:** Rasagyna Peddapalli | rasagyna.p@gmail.com
+**Submitted by:** Rasagyna Peddapalli | rasagyna.p@gmail.com | github.com/rasagyna1106
+
+---
+
+## Problem Statement
+
+Healthcare facilities must maintain active accreditations from bodies like Joint Commission and NCQA. When accreditations expire, facilities lose operating licenses and insurance reimbursements. Accreditation data sits in raw JSON in S3 with no automated system to extract metrics, flag expiring records, or trigger processing on new uploads. Manual tracking does not scale.
+
+---
+
+## Solution
+
+A four-stage AWS pipeline that ingests raw facility JSON, extracts KPIs via Athena SQL, filters expiring accreditations via Python, and automates the workflow with Lambda and Step Functions. Runs end to end without manual intervention. Handles malformed data gracefully. Sends SNS alerts on failure.
 
 ---
 
 ## Stage Selection Rationale
 
-All four stages were completed. Stages 1 and 2 were chosen as the primary stages because they directly reflect the core data engineering responsibilities in the MedLaunch role-SQL analytics on cloud data lakes and Python based ETL with proper validation and error handling. Stage 1 demonstrates Athena-specific patterns like CTAS, JsonSerDe, and Parquet output for cost optimization. Stage 2 demonstrates production Python practices including structured logging, boto3 exception handling, and resilient JSON parsing. Stages 3 and 4 were added to show the full serverless architecture and Lambda for event-driven ingestion and Step Functions for workflow orchestration with async Athena polling, S3 result promotion, and SNS failure alerting.
+All four stages were completed. Stages 1 and 2 were the primary stages — SQL analytics on a cloud data lake and Python ETL with production-grade error handling, which maps directly to the MedLaunch data engineering role. Stage 3 added event-driven ingestion so new uploads trigger processing automatically. Stage 4 completed the pipeline with async Athena polling, result promotion to production, and SNS failure alerting — turning a collection of scripts into a reliable automated workflow.
 
 ---
 
 ## Architecture
-
-```
 S3 raw/
-  |
-  |-- Athena (Stage 1) --> CTAS Parquet --> S3 output/facility_metrics/
-  |
-  |-- Python (Stage 2) --> Filter expiring --> S3 output/expiring/
-  |
-  |-- S3 Upload Event
-        |
-        Lambda: medlaunch-facility-processor (Stage 3)
-          |
-          Start Athena query --> return queryExecutionId
-          |
-          Step Functions: medlaunch-accreditation-pipeline (Stage 4)
-            |
-            Wait 10s --> Check status --> Succeeded: copy to production/
-                                      --> Failed: SNS alert email
-```
+|-- Athena (Stage 1) ---------> CTAS Parquet --> S3 output/facility_metrics/
+|-- Python (Stage 2) ---------> Filter expiring --> S3 output/expiring/
+|-- S3 Upload Event
+|
+Lambda (Stage 3): start Athena query, return queryExecutionId
+|
+Step Functions (Stage 4):
+Wait 10s --> Check status --> Success: copy to production/
+--> Failure: SNS alert
 
 ---
 
 ## Repository Structure
-
-```
 medlaunch-challenge/
-  README.md
-  data/
-    sample_facilities.ndjson       8 records (5 core + 3 edge cases)
-  athena/
-    01_create_table.sql            External table over S3 JSON
-    02_extract_metrics_ctas.sql    CTAS to Parquet with facility KPIs
-  python/
-    filter_expiring_accreditations.py
-    requirements.txt
-  lambda/
-    handler.py                     Stage 3 - S3 triggered Lambda
-    athena_status_checker.py       Stage 4 - Athena polling Lambda
-    requirements.txt
-  stepfunctions/
-    pipeline.json                  Stage 4 - State machine definition
-  iam/
-    least_privilege_policy.json    Minimal IAM permissions
-```
+README.md
+data/
+sample_facilities.ndjson       8 records (5 core + 3 edge cases)
+athena/
+01_create_table.sql            External table over S3 JSON
+02_extract_metrics_ctas.sql    CTAS to Parquet with facility KPIs
+python/
+filter_expiring_accreditations.py
+requirements.txt
+lambda/
+handler.py                     Stage 3 - S3 triggered Lambda
+athena_status_checker.py       Stage 4 - Athena polling Lambda
+requirements.txt
+stepfunctions/
+pipeline.json                  Stage 4 - State machine definition
+iam/
+least_privilege_policy.json    Minimal IAM permissions
 
 ---
 
-## Stage 1 - Athena SQL
+## Stage 1 — Athena SQL
 
-Creates an external table over raw NDJSON in S3 using the OpenX JsonSerDe, then runs a CTAS query to extract facility metrics and write Parquet output.
+**Problem:** Raw facility JSON has nested arrays for services, labs, and accreditations. No way to query it directly. Need to extract 5 metrics per facility including earliest expiry date across multiple accreditation records.
 
-**Why Parquet:** Columnar and Snappy-compressed. Reduces Athena scan cost by 10-100x versus raw JSON. Athena charges $5 per TB scanned so format choice matters at scale.
+**Solution:** Athena external table over S3 raw prefix using OpenX JsonSerDe. CTAS query extracts the 5 fields and writes Parquet output to S3.
 
-**Why external table:** Raw data stays in S3 untouched. Athena queries it directly with no ETL preprocessing step, no data movement, no extra cost.
+**Why:**
+- External table means zero data movement. Raw files stay untouched in S3.
+- JsonSerDe handles nested structs and arrays natively. No preprocessing needed.
+- CTAS writes Parquet in a single SQL statement. No extra infrastructure.
+- Parquet reduces Athena scan cost by 10-100x versus raw JSON.
+- ignore.malformed.json skips bad records without aborting the query.
 
-**Why ignore.malformed.json:** A single bad record in source data does not abort the entire query. Malformed rows are skipped and logged.
+**Result:** facility_metrics table created with 5 rows. Parquet output in s3://medlaunch-techchallenge-rasagyna/output/facility_metrics/
 
-Fields extracted: facility_id, facility_name, employee_count, number_of_offered_services, expiry_date_of_first_accreditation, state.
-
-**Run:**
 ```sql
--- Run in Athena Query Editor with database set to default
--- Run 01_create_table.sql first, then 02_extract_metrics_ctas.sql
--- Verify: SELECT * FROM facility_metrics ORDER BY expiry_date_of_first_accreditation;
+-- External table reads JSON directly from S3 using OpenX JsonSerDe
+-- CTAS output is Parquet + Snappy — reduces scan cost 10-100x vs raw JSON
+-- CROSS JOIN UNNEST flattens accreditations array for MIN(valid_until)
+-- WHERE CARDINALITY > 0 excludes facilities with no accreditation records
+-- ignore.malformed.json skips bad rows without failing the entire query
 ```
 
 ---
 
-## Stage 2 - Python
+## Stage 2 — Python
 
-Reads all NDJSON files from S3, filters facilities with any accreditation expiring within 6 months, writes filtered records back to a separate S3 prefix.
+**Problem:** Filtering facilities by expiry date within 6 months is cleaner in Python than SQL. Source data arrives in inconsistent formats from different upstream systems.
 
-**Why relativedelta not timedelta:** relativedelta(months=6) advances by calendar months correctly. timedelta(days=180) gives wrong results at month boundaries and leap years.
+**Solution:** boto3 script reads all files from raw S3 prefix, filters on expiry window, writes matching records as NDJSON to a separate prefix.
 
-**Why dual JSON parser:** Source data arrives as either strict NDJSON or glued JSON where objects are concatenated without a wrapper array. The script handles both transparently without requiring pre-normalization.
+**Why:**
+- relativedelta(months=6) gives correct calendar month arithmetic. timedelta(days=180) gives wrong results at month boundaries.
+- Dual parser handles both strict NDJSON and glued JSON transparently.
+- ClientError handlers on every boto3 call. Non-zero exit code on failure.
+- Output as NDJSON means Athena can query it immediately without transformation.
 
-**Why structured logging:** Every S3 call, record count, and filter result is logged with timestamps. Makes debugging straightforward in CloudWatch if deployed as Lambda.
+**Result:** 8 records loaded. 5 facilities filtered. Edge case records handled with warning logs. Output in s3://medlaunch-techchallenge-rasagyna/output/expiring/
 
-**Run:**
-```bash
-cd python
-pip install -r requirements.txt
-python filter_expiring_accreditations.py \
-  --source-bucket medlaunch-techchallenge-rasagyna \
-  --source-prefix raw/ \
-  --dest-bucket   medlaunch-techchallenge-rasagyna \
-  --dest-prefix   output/expiring/ \
-  --months        6 \
-  --region        us-east-1
+```python
+# relativedelta used over timedelta — correct at month boundaries and leap years
+# Dual JSON parser: tries strict NDJSON first, falls back to streaming decoder
+# All boto3 calls wrapped in ClientError — exits non-zero on AWS failures
+# Output as NDJSON — immediately Athena-queryable without transformation
+# Structured logging on every S3 call and filter result for CloudWatch analysis
 ```
 
 ---
 
-## Stage 3 - Lambda
+## Stage 3 — Lambda
 
-Triggered automatically when a new JSON or NDJSON file lands in the raw/ S3 prefix. Starts an Athena query counting accredited facilities per state and returns the QueryExecutionId.
+**Problem:** Running the script manually on every upload is not production behaviour. New data should trigger processing automatically.
 
-**Why not poll inside Lambda:** Athena queries take 5-60+ seconds. Polling inside Lambda burns execution time and risks the 15-minute timeout. Lambda starts the query and exits immediately. Step Functions handles the polling.
+**Solution:** Lambda triggered by S3 ObjectCreated events on raw/ prefix. Starts Athena query, returns queryExecutionId for Step Functions to poll.
 
-**Why prefix scoped trigger:** The trigger fires only on raw/ prefix to prevent recursive invocations when the Lambda writes output files to the same bucket.
+**Why:**
+- S3 event notification is the correct trigger pattern. No polling, no cron.
+- Lambda exits immediately after starting the query. Does not poll internally. Polling inside Lambda risks the 15-minute timeout.
+- Trigger scoped to raw/ only. Prevents recursive invocations when output files are written to the same bucket.
+- boto3 client initialized outside handler for reuse across warm invocations.
 
-**Deploy:**
-```
-Function name:   medlaunch-facility-processor
-Runtime:         Python 3.12
-Handler:         lambda_function.handler
-Environment:
-  ATHENA_DATABASE        = default
-  ATHENA_RESULTS_BUCKET  = medlaunch-techchallenge-rasagyna
-  ATHENA_WORKGROUP       = primary
-Trigger:         S3 - bucket: medlaunch-techchallenge-rasagyna, prefix: raw/
+**Result:** Lambda deployed with S3 trigger. Test execution returned queryExecutionId confirming Athena query started.
+
+```python
+# boto3 client outside handler — reused across warm Lambda invocations
+# Trigger scoped to raw/ prefix — prevents recursive S3 invocation loop
+# Lambda starts query and exits — polling handled by Step Functions (Stage 4)
+# Environment variables for all config — no hardcoded bucket or database names
+# is_processable_file() filters .json and .ndjson only — ignores other file types
 ```
 
 ---
 
-## Stage 4 - Step Functions
+## Stage 4 — Step Functions
 
-Orchestrates the full pipeline: invoke Lambda, wait for Athena, copy results to production on success, send SNS alert on failure.
+**Problem:** Athena queries are async. Something needs to wait for completion, check the result, copy output to production on success, and alert on failure. Building this inside Lambda is brittle and expensive.
 
-**Why Step Functions over polling in Lambda:** Native Wait state pauses execution without consuming compute. The workflow resumes automatically when the wait completes. This is the correct serverless pattern for async service calls.
+**Solution:** Step Functions state machine that waits, polls, evaluates, and routes to success or failure with full SNS alerting.
 
-**Why every state has a Catch block:** No error can silently pass through. Any failure at any stage routes to SendFailureAlert which publishes the full error details to SNS before terminating.
+**Why:**
+- Wait state pauses execution without consuming compute. Correct serverless pattern for async calls.
+- Separate status checker Lambda keeps concerns clean. One function starts queries, one checks them.
+- Every state has a Catch block. No failure can pass through silently.
+- SNS publishes full error payload so the alert email contains enough context to diagnose without opening CloudWatch.
+- CopyObject to production/ separates raw Athena output from curated data. Downstream consumers always read validated results.
 
 **State machine flow:**
-```
 StartAthenaQuery --> ExtractQueryId --> WaitForQuery (10s)
-  --> CheckQueryStatus --> EvaluateStatus
-        --> SUCCEEDED: CopyResultsToProduction --> PipelineSucceeded
-        --> FAILED:    SendFailureAlert --> PipelineFailed
-        --> RUNNING:   back to WaitForQuery
-```
+--> CheckQueryStatus --> EvaluateStatus
+--> SUCCEEDED: CopyResultsToProduction --> PipelineSucceeded
+--> FAILED:    SendFailureAlert --> PipelineFailed
+--> RUNNING:   loop back to WaitForQuery
 
-**Deploy:** Create state machine using stepfunctions/pipeline.json. Attach role with Lambda invoke, S3 CopyObject, and SNS publish permissions.
+**Result:** State machine executed successfully. Full green flow confirmed. SNS alert tested and working.
+
+```json
+// Wait state pauses without compute cost — correct pattern for async Athena
+// Catch on every state routes all failures to SendFailureAlert
+// Choice state reads boolean flags from status checker — clean routing logic
+// CopyObject promotes results to production/ only after SUCCEEDED confirmation
+// SNS message includes full error payload for immediate diagnosis
+```
 
 ---
 
 ## Error Handling Test Cases
 
-Three edge case records were added to data/sample_facilities.ndjson to demonstrate robust error handling:
+Three edge case records added to demonstrate robust error handling:
 
-**FAC33333 - blank valid_until:** Python logs a warning and skips the accreditation without crashing. The facility is excluded from the expiring list.
+**FAC33333 - blank valid_until:** Python logs a warning and skips the record. Does not crash.
 
-**FAC44444 - empty accreditations array:** Python returns False immediately on the empty array check. Athena CTAS excludes this facility via the CARDINALITY > 0 filter.
+**FAC44444 - empty accreditations array:** Python returns False immediately. Athena excludes via CARDINALITY > 0 filter.
 
-**FAC55555 - expired in 2020:** Python correctly catches past-expiry dates within the 6-month window. Demonstrates the filter works for backlogged historical data, not just future dates.
+**FAC55555 - expired in 2020:** Correctly caught by the 6-month filter. Demonstrates the filter works on historical backlog data too.
 
 ---
 
 ## IAM — Least Privilege
 
-Policy in iam/least_privilege_policy.json. No wildcards. No admin permissions.
+No wildcards. No admin permissions. Every permission scoped to exact resource.
 
 | Permission | Scope |
 |---|---|
@@ -174,7 +190,7 @@ Policy in iam/least_privilege_policy.json. No wildcards. No admin permissions.
 
 ## Cost
 
-Everything ran within AWS Free Tier limits. Total cost: $0.00.
+Total cost: $0.00 — all within AWS Free Tier.
 
 | Service | Usage | Free Tier |
 |---|---|---|
